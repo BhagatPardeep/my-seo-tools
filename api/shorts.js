@@ -11,59 +11,45 @@ export default async function handler(req, res) {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
-    // 2. The New "Community" Backup List
-    // These APIs are less strict than Cobalt and usually allow Vercel IPs
-    const apis = [
-        {
-            // API 1: Nyxs (Very stable for Shorts)
-            url: `https://api.nyxs.pw/dl/yt-shorts?url=${encodeURIComponent(url)}`,
-            method: 'GET',
-            extractor: (data) => data.result?.url
-        },
-        {
-            // API 2: GiftedTech (Good backup)
-            url: `https://api.giftedtech.my.id/api/download/dl?url=${encodeURIComponent(url)}&apikey=gifted`,
-            method: 'GET',
-            extractor: (data) => data.result?.url || data.url
-        },
-        {
-            // API 3: DtStudio (Another engine)
-            url: `https://api.dts.studio/api/v1/ytdl?url=${encodeURIComponent(url)}`,
-            method: 'GET',
-            extractor: (data) => data.info?.url
-        }
-    ];
+    try {
+        // We will use a reliable external API that powers many of these sites
+        // This one is specifically designed for Shorts and is very fast
+        const targetApi = `https://api.v1.oshara.net/api/v1/convert?url=${encodeURIComponent(url)}&type=video`;
 
-    // 3. Loop through them until one works
-    for (const api of apis) {
-        try {
-            console.log(`Trying API: ${api.url}`);
-            
-            const response = await fetch(api.url, { method: api.method });
-            const data = await response.json();
-            
-            // Extract the video link using the specific rule for that API
-            const downloadLink = api.extractor(data);
-
-            if (downloadLink) {
-                return res.status(200).json({
-                    title: "Shorts Video (Ready)",
-                    thumbnail: "https://i.ytimg.com/vi/" + extractVideoID(url) + "/hqdefault.jpg",
-                    downloadUrl: downloadLink
-                });
+        const response = await fetch(targetApi, {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
-        } catch (e) {
-            console.error("API failed, trying next...");
-        }
-    }
+        });
 
-    // 4. If all fail
-    return res.status(500).json({ 
-        error: "Server overloaded. Please click the button again in 5 seconds." 
-    });
+        const data = await response.json();
+
+        // 2. Extract the video data
+        // Different APIs return data differently, so we check a few common spots
+        const downloadUrl = data.url || data.result?.url || data.data?.url;
+        const title = data.title || data.meta?.title || "YouTube Short";
+        const thumb = data.thumb || data.meta?.thumbnail || `https://i.ytimg.com/vi/${extractVideoID(url)}/hqdefault.jpg`;
+
+        if (!downloadUrl) {
+            throw new Error("Could not extract video link.");
+        }
+
+        return res.status(200).json({
+            title: title,
+            thumbnail: thumb,
+            downloadUrl: downloadUrl
+        });
+
+    } catch (error) {
+        console.error("Fetch failed:", error);
+        return res.status(500).json({ 
+            error: "All servers busy.",
+            details: error.message 
+        });
+    }
 }
 
-// Helper to get thumbnail
 function extractVideoID(url) {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
