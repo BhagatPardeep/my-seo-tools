@@ -2,6 +2,8 @@
   "name": "my-seo-tools",
   "version": "1.0.0",
   "dependencies": {
-    "cheerio": "latest"
+    "cheerio": "latest",
+    "@distube/ytdl-core": "^4.13.5"
   }
 }
+
