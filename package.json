@@ -1,8 +1,8 @@
 {
-  "name": "seo-fetcher",
+  "name": "my-seo-tools",
   "version": "1.0.0",
   "dependencies": {
-    "cheerio": "^1.0.0-rc.12",
-    "ytdl-core": "^4.11.5"
+    "cheerio": "latest",
+    "ytdl-core": "latest"
   }
 }
