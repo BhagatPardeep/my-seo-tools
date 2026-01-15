@@ -1,0 +1,8 @@
+{
+  "name": "seo-fetcher",
+  "version": "1.0.0",
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "ytdl-core": "^4.11.5"
+  }
+}
