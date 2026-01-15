@@ -1,4 +1,15 @@
 export default async function handler(req, res) {
+
+  // ✅ CORS HEADERS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  // Preflight request
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   const { url } = req.query;
 
   if (!url || !url.includes("instagram.com")) {
@@ -21,28 +32,20 @@ export default async function handler(req, res) {
       }
     });
 
-    if (!response.ok) {
-      throw new Error("Instagram blocked request");
-    }
+    if (!response.ok) throw new Error("Instagram blocked request");
 
     const data = await response.json();
 
     const video =
-      data?.items?.[0]?.video_versions?.[0]?.url ||
       data?.graphql?.shortcode_media?.video_url;
 
-    if (!video) {
-      throw new Error("Video not found");
-    }
+    if (!video) throw new Error("Video not found");
 
-    res.json({
-      status: "success",
-      download_url: video
-    });
+    res.json({ status: "success", download_url: video });
 
   } catch (err) {
     res.status(500).json({
-      error: "Failed to fetch reel",
+      error: "Failed",
       details: err.message
     });
   }
