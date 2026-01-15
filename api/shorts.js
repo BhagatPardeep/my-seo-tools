@@ -2,7 +2,6 @@ export default async function handler(req, res) {
     // 1. Enable CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
@@ -12,56 +11,55 @@ export default async function handler(req, res) {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
-    // 2. The List of Backup Servers (The "Terminator" Logic)
-    const instances = [
-        'https://api.cobalt.tools/api/json',
-        'https://cobalt.steamworkshopdownloader.io/api/json',
-        'https://api.server1.cobalt.tools/api/json', 
-        'https://co.wuk.sh/api/json'
+    // 2. The New "Community" Backup List
+    // These APIs are less strict than Cobalt and usually allow Vercel IPs
+    const apis = [
+        {
+            // API 1: Nyxs (Very stable for Shorts)
+            url: `https://api.nyxs.pw/dl/yt-shorts?url=${encodeURIComponent(url)}`,
+            method: 'GET',
+            extractor: (data) => data.result?.url
+        },
+        {
+            // API 2: GiftedTech (Good backup)
+            url: `https://api.giftedtech.my.id/api/download/dl?url=${encodeURIComponent(url)}&apikey=gifted`,
+            method: 'GET',
+            extractor: (data) => data.result?.url || data.url
+        },
+        {
+            // API 3: DtStudio (Another engine)
+            url: `https://api.dts.studio/api/v1/ytdl?url=${encodeURIComponent(url)}`,
+            method: 'GET',
+            extractor: (data) => data.info?.url
+        }
     ];
 
-    // 3. Loop through servers until one works
-    for (const base of instances) {
+    // 3. Loop through them until one works
+    for (const api of apis) {
         try {
-            console.log(`Trying server: ${base}`);
+            console.log(`Trying API: ${api.url}`);
             
-            const response = await fetch(base, {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
-                body: JSON.stringify({
-                    url: url,
-                    vCodec: 'h264',
-                    vQuality: '720',
-                    aFormat: 'mp3',
-                    isAudioOnly: false
-                })
-            });
-
+            const response = await fetch(api.url, { method: api.method });
             const data = await response.json();
+            
+            // Extract the video link using the specific rule for that API
+            const downloadLink = api.extractor(data);
 
-            // If this server worked, return the data immediately!
-            if (data.url) {
+            if (downloadLink) {
                 return res.status(200).json({
-                    title: "Download Ready",
+                    title: "Shorts Video (Ready)",
                     thumbnail: "https://i.ytimg.com/vi/" + extractVideoID(url) + "/hqdefault.jpg",
-                    downloadUrl: data.url,
-                    serverUsed: base
+                    downloadUrl: downloadLink
                 });
             }
         } catch (e) {
-            console.error(`Server ${base} failed, trying next...`);
-            // Continue to the next server in the list
+            console.error("API failed, trying next...");
         }
     }
 
-    // 4. If ALL servers fail
+    // 4. If all fail
     return res.status(500).json({ 
-        error: "All servers are busy. Please try again in 10 seconds.",
-        details: "Vercel IP might be temporarily rate-limited."
+        error: "Server overloaded. Please click the button again in 5 seconds." 
     });
 }
 
