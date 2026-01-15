@@ -1,28 +1,49 @@
-import ytdl from "@distube/ytdl-core";
-
 export default async function handler(req, res) {
   const { url } = req.query;
 
-  if (!url || !ytdl.validateURL(url)) {
-    return res.status(400).json({ error: "Invalid YouTube URL" });
+  if (!url || !url.includes("instagram.com")) {
+    return res.status(400).json({ error: "Invalid Instagram URL" });
   }
 
   try {
-    const info = await ytdl.getInfo(url);
+    const match = url.match(/reel\/([^\/]+)/);
+    if (!match) {
+      return res.status(400).json({ error: "Not a reel URL" });
+    }
 
-    const format = ytdl.chooseFormat(info.formats, {
-      quality: "highest",
-      filter: "videoandaudio"
+    const shortcode = match[1];
+    const apiUrl = `https://www.instagram.com/reel/${shortcode}/?__a=1&__d=dis`;
+
+    const response = await fetch(apiUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "application/json"
+      }
     });
 
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${info.videoDetails.title}.mp4"`
-    );
+    if (!response.ok) {
+      throw new Error("Instagram blocked request");
+    }
 
-    ytdl(url, { format }).pipe(res);
+    const data = await response.json();
+
+    const video =
+      data?.items?.[0]?.video_versions?.[0]?.url ||
+      data?.graphql?.shortcode_media?.video_url;
+
+    if (!video) {
+      throw new Error("Video not found");
+    }
+
+    res.json({
+      status: "success",
+      download_url: video
+    });
+
   } catch (err) {
-    res.status(500).json({ error: "Download failed", details: err.message });
+    res.status(500).json({
+      error: "Failed to fetch reel",
+      details: err.message
+    });
   }
 }
