@@ -11,29 +11,34 @@ export default async function handler(req, res) {
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
-    try {
-        // We will use a reliable external API that powers many of these sites
-        // This one is specifically designed for Shorts and is very fast
-        const targetApi = `https://api.v1.oshara.net/api/v1/convert?url=${encodeURIComponent(url)}&type=video`;
+    // --- PASTE YOUR RAPIDAPI KEY HERE ---
+    const rapidApiKey = "YOUR_RAPIDAPI_KEY_HERE"; 
+    // ------------------------------------
 
-        const response = await fetch(targetApi, {
+    try {
+        // We use a professional API service that rotates IPs for us
+        const response = await fetch(`https://yt-stream-download.p.rapidapi.com/GetShorts?url=${encodeURIComponent(url)}`, {
             method: 'GET',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'X-RapidAPI-Key': ecd7d95a13msh21df9996905ca05p1ba68djsnc15adc9d6abe,
+                'X-RapidAPI-Host': 'yt-stream-download.p.rapidapi.com'
             }
         });
 
         const data = await response.json();
 
-        // 2. Extract the video data
-        // Different APIs return data differently, so we check a few common spots
-        const downloadUrl = data.url || data.result?.url || data.data?.url;
-        const title = data.title || data.meta?.title || "YouTube Short";
-        const thumb = data.thumb || data.meta?.thumbnail || `https://i.ytimg.com/vi/${extractVideoID(url)}/hqdefault.jpg`;
-
-        if (!downloadUrl) {
-            throw new Error("Could not extract video link.");
+        // Check if the API returned an error
+        if (!data.Success && !data.url) {
+            throw new Error("RapidAPI could not find video.");
         }
+
+        // Extract the best video link
+        // Note: Different RapidAPIs have different response structures. 
+        // This example matches 'YT Stream Download'.
+        // If you use a different one, check their 'Example Response' on the website.
+        const downloadUrl = data.url || data.link || data.data?.url; 
+        const title = data.title || "YouTube Short";
+        const thumb = data.thumbnail || `https://i.ytimg.com/vi/${extractVideoID(url)}/hqdefault.jpg`;
 
         return res.status(200).json({
             title: title,
@@ -42,10 +47,10 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        console.error("Fetch failed:", error);
+        console.error("RapidAPI Error:", error);
         return res.status(500).json({ 
-            error: "All servers busy.",
-            details: error.message 
+            error: "Download failed.", 
+            details: "Check your RapidAPI Key quota." 
         });
     }
 }
