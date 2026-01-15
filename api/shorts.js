@@ -1,36 +1,39 @@
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
 
 export default async function handler(req, res) {
-    // 1. Allow connections
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+
+    // Handle Preflight for CORS
+    if (req.method === 'OPTIONS') {
+        res.status(200).end();
+        return;
+    }
 
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'URL required' });
 
     try {
-        // 2. Get Video Info
-        const info = await ytdl.getInfo(url);
-
-        // 3. Find Best Format (THE FIX)
-        // Instead of forcing "18", we ask for any format that has both Audio + Video
-        const formats = ytdl.filterFormats(info.formats, 'audioandvideo');
+        // 1. Get Info with specific "Agent" settings to fool YouTube
+        // This helps bypass the 410/403 errors
+        const agent = ytdl.createAgent([{ name: 'cookie', value: '' }]); 
         
-        // Grab the best quality one available
+        const info = await ytdl.getInfo(url, { agent });
+
+        // 2. Get the best format that has both audio and video
+        const formats = ytdl.filterFormats(info.formats, 'audioandvideo');
         const bestFormat = formats.length > 0 ? formats[0] : null;
 
-        if (!bestFormat) {
-             throw new Error("No downloadable format found for this Short.");
-        }
+        if (!bestFormat) throw new Error("No video found");
 
         return res.status(200).json({
             title: info.videoDetails.title,
-            thumbnail: info.videoDetails.thumbnails.pop().url, // Get the largest thumbnail
+            thumbnail: info.videoDetails.thumbnails.pop().url,
             downloadUrl: bestFormat.url
         });
 
     } catch (e) {
-        // Return the ACTUAL error message so we can debug if it fails again
+        console.error(e);
         return res.status(500).json({ error: e.message });
     }
 }
