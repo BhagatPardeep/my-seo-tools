@@ -1,71 +1,55 @@
 import { getTranscript } from "youtube-transcript";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Stop words list
-const STOP_WORDS = new Set([
-  "the","is","and","to","of","a","in","that","it","on","for","as","with",
-  "this","was","are","be","by","or","from","at","an"
-]);
-
-function summarizeText(text, mode = "short") {
-  const sentences = text
-    .replace(/\n/g, " ")
-    .split(". ")
-    .filter(s => s.length > 40);
-
-  const wordFreq = {};
-
-  // Build word frequency
-  sentences.forEach(sentence => {
-    sentence.toLowerCase().split(" ").forEach(word => {
-      word = word.replace(/[^a-z]/g, "");
-      if (!STOP_WORDS.has(word) && word.length > 3) {
-        wordFreq[word] = (wordFreq[word] || 0) + 1;
-      }
-    });
-  });
-
-  // Score sentences
-  const ranked = sentences.map(sentence => {
-    let score = 0;
-    sentence.toLowerCase().split(" ").forEach(word => {
-      word = word.replace(/[^a-z]/g, "");
-      if (wordFreq[word]) score += wordFreq[word];
-    });
-    return { sentence, score };
-  });
-
-  ranked.sort((a, b) => b.score - a.score);
-
-  if (mode === "bullets") {
-    return ranked.slice(0, 5).map(r => "• " + r.sentence).join("\n");
-  }
-
-  if (mode === "detailed") {
-    return ranked.slice(0, 8).map(r => r.sentence).join(". ") + ".";
-  }
-
-  // short
-  return ranked.slice(0, 3).map(r => r.sentence).join(". ") + ".";
-}
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    return res.status(405).json({ error: "Only POST allowed" });
   }
 
   const { url, type } = req.body;
 
-  try {
-    const transcript = await getTranscript(url);
-    const fullText = transcript.map(t => t.text).join(" ");
+  if (!url) {
+    return res.json({ summary: "Please provide a YouTube URL." });
+  }
 
-    const summary = summarizeText(fullText, type);
+  try {
+    // 1️⃣ Fetch transcript
+    const transcript = await getTranscript(url);
+    let text = transcript.map(t => t.text).join(" ");
+
+    // 🔒 Safety limit (important)
+    text = text.slice(0, 12000);
+
+    // 2️⃣ Prompt engineering
+    let prompt = "";
+
+    switch (type) {
+      case "bullets":
+        prompt = `Summarize this YouTube video into clear bullet points:\n\n${text}`;
+        break;
+      case "detailed":
+        prompt = `Write a detailed, well-structured summary of this YouTube video:\n\n${text}`;
+        break;
+      default:
+        prompt = `Write a short, clear summary of this YouTube video:\n\n${text}`;
+    }
+
+    // 3️⃣ Gemini model
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash"
+    });
+
+    const result = await model.generateContent(prompt);
+    const summary = result.response.text();
 
     res.json({ summary });
-  } catch (e) {
+
+  } catch (err) {
     res.json({
       summary:
-        "Transcript not available. This video may be private or captions are disabled."
+        "Unable to summarize this video. Captions may be disabled or the video is restricted."
     });
   }
 }
